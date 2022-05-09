@@ -1,5 +1,5 @@
 const PathEditor = (() => { 
-    const version = '0.1';
+    const version = '0.2';
     const schemaVersion = '0.1';
     const scriptName = 'PathEditor';
     
@@ -254,10 +254,19 @@ const PathEditor = (() => {
         }
     }
     
+    function pathEditor_handleRemovePath (obj) {
+        if (obj.get("_id") === state[scriptName].buffer.pathID) {
+            commit();
+        }
+    }    
+    
     async function pathEditor_handleObjChange (obj,prev) {
         try {
-            //only trigger when token is moved
-            if (obj.get('left') === prev.left && obj.get('top') === prev.top) {
+            let moveMode = obj.get('left') !== prev.left || obj.get('top') !== prev.top;
+            let resizeMode = obj.get('width') !== prev.width || obj.get('height') !== prev.height
+            //only trigger when token is moved or resized
+            //if ( (obj.get('left') === prev.left && obj.get('top') === prev.top) && (obj.get('width') === prev.width && obj.get('height') === prev.height)) {
+            if (!moveMode && !resizeMode) {
                 return;
             }
             
@@ -284,6 +293,11 @@ const PathEditor = (() => {
                 controlPtIndex = getControlPtIndex(id);
                 
                 if (controlPtIndex !== undefined) {
+                    
+                    if (resizeMode) {
+                        obj.set({width: prev.width, height: prev.height, left: prev.left, top: prev.top});
+                        return;
+                    }
                     
                     if (snapToGrid) {
                         //moves tok to nearest intersection & updates the controlToks state element
@@ -881,6 +895,7 @@ const PathEditor = (() => {
         //******************************************************************************************************
         if (msg.type === "api" && msg.content.toLowerCase().indexOf("!path_deletept")==0) {
             try {
+                let tokObj;
                 //ignore accidental path selections
                 let selected = msg.selected.filter(e => e._type==='graphic');
                 
@@ -890,7 +905,7 @@ const PathEditor = (() => {
                 
                 //initial error checking
                 if (!origPathObj) {
-                    sendChat(scriptName,`/w gm Error: You cannot add a pt to a path that is not being actively edited. First select a path and run the \`\`!path_edit\`\` command.`);
+                    sendChat(scriptName,`/w gm Error: You cannot delete a pt from a path that is not being actively edited. First select a path and run the \`\`!path_edit\`\` command.`);
                     return;
                 }
                 
@@ -901,8 +916,8 @@ const PathEditor = (() => {
                     let idx = getControlPtIndex(tok._id);
                     if (idx) {
                         controlPtIndices.push(idx);
-                        let tokObj = getObj('graphic', tok._id);
-                        tokObj.remove();
+                        tokObj = getObj('graphic', tok._id);
+                        //tokObj.remove();
                     }
                 });
                 
@@ -931,6 +946,7 @@ const PathEditor = (() => {
                 let link = makePathEditLink(newPathObj.get("_id"), newControlToks, closedPoly)
                 
                 origPathObj.remove();
+                tokObj.remove();
             }
             catch(err) {
                 sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
@@ -1042,6 +1058,9 @@ const PathEditor = (() => {
         if (msg.type === "api" && msg.content.toLowerCase().indexOf("!path_edit")==0) {
         
             try {
+                //first closeout any actively edited paths  
+                commit();
+                //start editing new path
                 if (msg.selected !== undefined) {
                     let selected = msg.selected[0];
                     if (selected) {
@@ -1123,6 +1142,8 @@ const PathEditor = (() => {
         on('chat:message', pathEditor_HandleInput);
         on('change:graphic', pathEditor_handleObjChange);
         on('change:path', pathEditor_handleObjChange);
+        //on('destroy:graphic', pathEditor_handleRemoveToken);
+        on('destroy:path', pathEditor_handleRemovePath);
     };
     on('ready', () => {
         checkInstall();
