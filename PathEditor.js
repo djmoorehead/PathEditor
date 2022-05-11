@@ -1,5 +1,5 @@
 const PathEditor = (() => { 
-    const version = '0.2';
+    const version = '0.3';
     const schemaVersion = '0.1';
     const scriptName = 'PathEditor';
     
@@ -108,6 +108,17 @@ const PathEditor = (() => {
                     ability = createObj('ability', {characterid: charID, name: 'Pt_Shrink', action: '!path_ResizePt decrease', istokenaction: true});
                     ability = createObj('ability', {characterid: charID, name: 'Pt_Grow', action: '!path_ResizePt increase', istokenaction: true});
                 }
+            } else {
+                //controlPt character already exists, check for new abilities
+                let charID = editPtChars[0].get('_id');
+                let simplifyAbility = findObjs({
+                                            _type: 'ability',
+                                            _characterid: charID,
+                                            name: 'SimplifyPath'
+                                        }, {caseInsensitive: true}) || [];
+                if (simplifyAbility.length === 0) {
+                    let ability = createObj('ability', {characterid: charID, name: 'SimplifyPath', action: '!path_Simplify ?{Enter tolerance in pixels|5}', istokenaction: true});
+                }
             }
             
             let menuMacros = findObjs({
@@ -115,10 +126,7 @@ const PathEditor = (() => {
                 name: macroName
             }, {caseInsensitive: true}) || [];
             
-            if (menuMacros.length === 0) {
-                log(`====> From ${scriptName}: Creating collections macro: ${macroName}`);
-                
-                let actionText = `/w gm /w gm &{template:default}{{name=Path Editor Menu}} {{***START/STOP***\n` +
+            let actionText = `/w gm /w gm &{template:default}{{name=Path Editor Menu}} {{***START/STOP***\n` +
                                     `*(Select path to begin editing)*\n` +
                                     `[EDIT](~PathEditPt|Edit) [DONE](~PathEditPt|Done)\n\n` +
                                     `***REQUIRES 1 PT SELECTED***\n` +
@@ -128,10 +136,13 @@ const PathEditor = (() => {
                                     `***CONTROL PT OPTIONS***\n` +
                                     `*(No Selection Required)*\n` +
                                     `[SHRINK](~PathEditPt|Pt_Shrink) [GROW](~PathEditPt|Pt_Grow) [SET SIZE](~PathEditPt|Pt_SetSize) [TOGGLE COLOR](~PathEditPt|Pt_ToggleColor) [TOGGLE GRID SNAPPING](~PathEditPt|Pt_ToggleGridSnap)\n\n` +
-                                    `***OPEN/CLOSE POLYGON***\n` +
+                                    `***PATH FUNCTIONS***\n` +
                                     `*(Select path before running)*\n` +
-                                    `[OPEN](~PathEditPt|OpenPolygon) [CLOSE](~PathEditPt|ClosePolygon)\n` +
+                                    `[OPEN](~PathEditPt|OpenPolygon) [CLOSE](~PathEditPt|ClosePolygon) [SIMPLIFY](~PathEditPt|SimplifyPath)\n` +
                                 `}}`
+            if (menuMacros.length === 0) {
+                log(`====> From ${scriptName}: Creating collections macro: ${macroName}`);
+                
                 
                 let players = findObjs({_type:"player"}).filter(p => playerIsGM(p.get('_id')));
                 let gmID = players[0].get('_id');
@@ -145,6 +156,9 @@ const PathEditor = (() => {
                     log(`====> From ${scriptName}: Failed to create collections macro (${macroName}).`);
                     sendChat(scriptName,`/w gm \`\`${scriptName} failed to create a collections macro named (${macroName}) \`\``)
                 }
+            } else {
+                //macro already exists, update the action text
+                menuMacros[0].set('action', actionText)
             }
         }
         catch(err) {
@@ -447,6 +461,112 @@ const PathEditor = (() => {
         return pCopy;
     }
     
+    //***************************************************************************************
+    //  These functions are used for Ramer-Douglas-Peucker polyline simplification algorithm
+    //      copied from https://github.com/mourner/simplify-js/blob/master/simplify.js
+    //***************************************************************************************
+    // square distance between 2 points
+    function getSqDist(p1, p2) {
+        var dx = p1.x - p2.x,
+            dy = p1.y - p2.y;
+    
+        return dx * dx + dy * dy;
+    }
+    
+    // square distance from a point to a segment
+    function getSqSegDist(p, p1, p2) {
+        var x = p1.x,
+            y = p1.y,
+            dx = p2.x - x,
+            dy = p2.y - y;
+    
+        if (dx !== 0 || dy !== 0) {
+    
+            var t = ((p.x - x) * dx + (p.y - y) * dy) / (dx * dx + dy * dy);
+    
+            if (t > 1) {
+                x = p2.x;
+                y = p2.y;
+            } else if (t > 0) {
+                x += dx * t;
+                y += dy * t;
+            }
+        }
+    
+        dx = p.x - x;
+        dy = p.y - y;
+    
+        return dx * dx + dy * dy;
+    }
+    
+    // basic distance-based simplification
+    function simplifyRadialDist(points, sqTolerance) {
+        var prevPoint = points[0],
+            newPoints = [prevPoint],
+            point;
+    
+        for (var i = 1, len = points.length; i < len; i++) {
+            point = points[i];
+    
+            if (getSqDist(point, prevPoint) > sqTolerance) {
+                newPoints.push(point);
+                prevPoint = point;
+            }
+        }
+    
+        if (prevPoint !== point) newPoints.push(point);
+    
+        return newPoints;
+    }
+    
+    function simplifyDPStep(points, first, last, sqTolerance, simplified) {
+        var maxSqDist = sqTolerance,
+            index;
+    
+        for (var i = first + 1; i < last; i++) {
+            var sqDist = getSqSegDist(points[i], points[first], points[last]);
+    
+            if (sqDist > maxSqDist) {
+                index = i;
+                maxSqDist = sqDist;
+            }
+        }
+    
+        if (maxSqDist > sqTolerance) {
+            if (index - first > 1) simplifyDPStep(points, first, index, sqTolerance, simplified);
+            simplified.push(points[index]);
+            if (last - index > 1) simplifyDPStep(points, index, last, sqTolerance, simplified);
+        }
+    }
+    
+    // simplification using Ramer-Douglas-Peucker algorithm
+    function simplifyDouglasPeucker(points, sqTolerance) {
+        var last = points.length - 1;
+    
+        var simplified = [points[0]];
+        simplifyDPStep(points, 0, last, sqTolerance, simplified);
+        simplified.push(points[last]);
+    
+        return simplified;
+    }
+    
+    // both algorithms combined for awesome performance
+    function simplify(points, tolerance, highestQuality) {
+    
+        if (points.length <= 2) return points;
+    
+        var sqTolerance = tolerance !== undefined ? tolerance * tolerance : 1;
+    
+        points = highestQuality ? points : simplifyRadialDist(points, sqTolerance);
+        points = simplifyDouglasPeucker(points, sqTolerance);
+    
+        return points;
+    }
+    //***************************************************************************************
+    //  End of functions used for Ramer-Douglas-Peucker polyline simplification algorithm
+    //***************************************************************************************
+    
+
     //controlArray will look like ["M",0,0] or ["L",0,35] or ["Q",0,0,70,105], etc
     //This function grabs the control point from each array, which is the last two coordinates of the controlArray argument
         //converts from relative path coords to absolute map coords
@@ -648,7 +768,7 @@ const PathEditor = (() => {
                 if (controlToks) {
                     let cmd = msg.content.split(" ").map(e => e.toLowerCase());
                     if (cmd.length < 2) {
-                        sendChat(scriptName, '/w gm Wrong number of arguments for resize command. Syntax is !pathResizePt <increase/decrease/#>');
+                        sendChat(scriptName, '/w gm Wrong number of arguments for resize command. Syntax is !path_ResizePt <increase/decrease/#>');
                     }
                     
                     if (isNumber(parseInt(cmd[1]))) {
@@ -1050,6 +1170,108 @@ const PathEditor = (() => {
         //******************************************************************************************************
         if (msg.type === "api" && msg.content.toLowerCase().indexOf("!path_done")==0) {
             commit();
+        }
+        
+        //******************************************************************************************************
+        //SIMPLIFY PATH
+        //******************************************************************************************************
+        if (msg.type === "api" && msg.content.toLowerCase().indexOf("!path_simplify")==0) {
+            try {
+                //first closeout any actively edited paths  
+                commit();
+                
+                //simplify the  path
+                let tolerance = 5;  //default value
+                let cmd = msg.content.split(" ");
+                if (cmd.length > 1) {
+                    if (isNumber(parseInt(cmd[1]))) {
+                        tolerance = parseInt(cmd[1]);
+                    }
+                }
+                
+                if (msg.selected !== undefined) {
+                    let selected = msg.selected[0];
+                    if (selected) {
+                        let pathObj = findObjs({
+                          _type: 'path',
+                          _id: selected._id
+                        })[0];
+                        //log(pathObj)
+                        
+                        if (pathObj) {
+                            
+                            let spawnObj = getCharacterFromName(editPtCharName);
+                            if (spawnObj === undefined) {
+                                sendChat(scriptName,`/w gm Error: Character \"${controlTokName}\" must be in the journal with a default token `);
+                                return;
+                            }
+                            
+                            let vertices = [];
+                            let path = JSON.parse(pathObj.get("path"));
+                            let closedPoly = path.find(el => el[0] === 'Z') ? true : false;
+                            
+                            let center = new pt(pathObj.get("left"), pathObj.get("top"));
+                            let w = pathObj.get("width");
+                            let h = pathObj.get("height");
+                            let rot = degreesToRadians(pathObj.get("rotation"));
+                            let scaleX = pathObj.get("scaleX");
+                            let scaleY = pathObj.get("scaleY");
+                            let pageID = pathObj.get("pageid");
+                            let layer = pathObj.get("layer");
+                            let pathColor = pathObj.get("stroke");
+                            let editTokColor = getEditColor(pathColor);
+                            let editTokSide = editTokColor==='#000000' ? 1 : 2;
+                            
+                            // closed polygons will have an extra copy of the first point, plus a final array element ["Z"]. 
+                            //      we want to remove those before proceeding
+                            if (closedPoly) {
+                                path = path.slice(0, -2);
+                            }
+                            
+                            //covert path vertices from relative coords to actual map coords
+                            path.forEach((vert) => {
+                                let tempPt = convertPtPathToMapCoords(vert, center, w, h, rot, scaleX, scaleY);
+                                vertices.push(tempPt)
+                            });
+                            
+                            //This actually does the simplifying!!!
+                            let newPtsArr = simplify(vertices, tolerance, true);
+                            newPathObj = await createNewPathObj(pathObj, newPtsArr, closedPoly);
+                    
+                            //remove original path
+                            pathObj.remove();
+                            
+                            //start spawning path editing points at each vertex
+                            (function(pts){ //start wrapper code to allow callback function to reference the array of vertices
+                                spawnObj.get("_defaulttoken", async function(defaultToken) {
+                                    let controlToks = [];
+                                    let tok;
+                                    for (let i=0; i<pts.length; i++) {
+                                        editTok = await spawnTokenAtXY(defaultToken, pageID, pts[i].x, pts[i].y, defaultPtSize, 'all', true, editTokSide, layer);
+                                        tok = {
+                                            id: editTok.get("_id"),
+                                            x: pts[i].x,
+                                            y: pts[i].y
+                                        }
+                                        controlToks.push(tok);
+                                    }
+                                    
+                                    let link = makePathEditLink(newPathObj.get("_id"), controlToks, closedPoly)
+                                });
+                            })(newPtsArr);//passing in loop element to thisPt here
+                            
+                            
+                        } else {
+                            sendChat(scriptName, '/w gm Error: You must select a valid path object to proceed');
+                        }
+                    } else {
+                         sendChat(scriptName, '/w gm Error: You must select a valid path object to proceed');
+                    }
+                }
+            }
+            catch(err) {
+                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+            }
         }
         
         //******************************************************************************************************
