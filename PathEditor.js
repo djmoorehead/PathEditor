@@ -1,5 +1,9 @@
+var API_Meta = API_Meta||{}; // eslint-disable-line no-var
+API_Meta.PathEditor={offset:Number.MAX_SAFE_INTEGER,lineCount:-1};
+{ try { throw new Error(''); } catch (e) { API_Meta.PathEditor.offset = (parseInt(e.stack.split(/\n/)[1].replace(/^.*:(\d+):.*$/,'$1'),10)-3);}}
+
 const PathEditor = (() => { 
-    const version = '0.3';
+    const version = '0.4';
     const schemaVersion = '0.1';
     const scriptName = 'PathEditor';
     
@@ -162,7 +166,8 @@ const PathEditor = (() => {
             }
         }
         catch(err) {
-            sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+            let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+            sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
         }
     };
     
@@ -264,7 +269,8 @@ const PathEditor = (() => {
             return newPathObj;
         }
         catch(err) {
-          sendChat(scriptName, '/w gm Unhandled exception: ' + err.message)
+            let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+            sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
         }
     }
     
@@ -296,6 +302,9 @@ const PathEditor = (() => {
             
             //Get info from state object
             let controlToks = state[scriptName].buffer.controlToks;
+            if (controlToks === undefined) {
+                return;
+            }
             if (controlToks.length === 0) {
                 return;
             }
@@ -350,7 +359,8 @@ const PathEditor = (() => {
             }
         }
         catch(err) {
-          sendChat(scriptName, '/w gm Unhandled exception: ' + err.message)
+            let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+            sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
         }
     }
 
@@ -651,7 +661,8 @@ const PathEditor = (() => {
             return controlTok;
         }
         catch(err) {
-          sendChat(scriptName, '/w gm Unhandled exception: ' + err.message)
+            let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+            sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
         }
     };
     
@@ -794,7 +805,8 @@ const PathEditor = (() => {
                 }
             }
             catch(err) {
-                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+                let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+                sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
             }
         }
         
@@ -820,7 +832,8 @@ const PathEditor = (() => {
                 }
             }
             catch(err) {
-                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+                let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+                sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
             }
         }
         
@@ -864,7 +877,8 @@ const PathEditor = (() => {
                 }
             }
             catch(err) {
-                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+                let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+                sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
             }
         }
         
@@ -904,7 +918,8 @@ const PathEditor = (() => {
                 }
             }
             catch(err) {
-                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+                let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+                sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
             }
         }
         
@@ -1006,7 +1021,8 @@ const PathEditor = (() => {
                 });
             }
             catch(err) {
-                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+                let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+                sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
             }
         }
         
@@ -1069,7 +1085,8 @@ const PathEditor = (() => {
                 tokObj.remove();
             }
             catch(err) {
-                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+                let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+                sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
             }
         }
         
@@ -1153,7 +1170,8 @@ const PathEditor = (() => {
                 }
             }
             catch(err) {
-                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+                let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+                sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
             }
         }
         
@@ -1270,7 +1288,8 @@ const PathEditor = (() => {
                 }
             }
             catch(err) {
-                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+                let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+                sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
             }
         }
         
@@ -1356,7 +1375,8 @@ const PathEditor = (() => {
                 }
             }
             catch(err) {
-                sendChat(scriptName, '/w gm Unhandled Error: ' + err.message);
+                let errInfo = JSON.stringify({version: version, error: err.message, stack: err.stack, API_Meta});
+                sendChat(scriptName, `/w gm Unhandled exception: ${errInfo}`)
             }
         }
     };
@@ -1373,3 +1393,5 @@ const PathEditor = (() => {
     });
     
 })();
+
+{try{throw new Error('');}catch(e){API_Meta.PathEditor.lineCount=(parseInt(e.stack.split(/\n/)[1].replace(/^.*:(\d+):.*$/,'$1'),10)-API_Meta.PathEditor.offset);}}
